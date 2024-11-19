@@ -1,4 +1,5 @@
 {
+  "homepage": "https://vanhuyluan.github.io/app-encription",
   "name": "project-crypto",
   "version": "0.1.0",
   "private": true,
@@ -18,7 +19,11 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "concurrently \"npm run client\" \"npm run server\"",
+    "client": "react-scripts start",
+    "server": "cd backend && go run main.go rsa.go elgamal.go utils.go ecc.go",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -45,5 +50,9 @@
   "main": "index.js",
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "gh-pages": "^6.2.0"
+  }
 }
