@@ -26,6 +26,26 @@ type DecryptResponse struct {
 	DecryptedMessage string `json:"decryptedMessage"`
 }
 
+// Struct cho yêu cầu và phản hồi chữ ký số
+type SignRequest struct {
+	Algorithm string `json:"algorithm"`
+	Message   string `json:"message"`
+}
+
+type SignResponse struct {
+	Signature string `json:"signature"`
+}
+
+type VerifyRequest struct {
+	Algorithm string `json:"algorithm"`
+	Message   string `json:"message"`
+	Signature string `json:"signature"`
+}
+
+type VerifyResponse struct {
+	IsValid bool `json:"isValid"`
+}
+
 func encryptHandler(w http.ResponseWriter, r *http.Request) {
 	var req EncryptRequest
 	json.NewDecoder(r.Body).Decode(&req)
@@ -88,6 +108,75 @@ func decryptHandler(w http.ResponseWriter, r *http.Request) {
 	
 }
 
+// Hàm xử lý tạo chữ ký số (signHandler)
+func signHandler(w http.ResponseWriter, r *http.Request) {
+	var req SignRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	var signature string
+	switch strings.ToUpper(req.Algorithm) {
+	case "RSA":
+		// Tạo chữ ký số bằng RSA
+		signature, err = signMessage(req.Message)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	case "ELGAMAL":
+		// Tạo chữ ký số bằng Elgamal
+		signature, err = signElGamal(req.Message)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	case "ECC":
+		// Tạo chữ ký số bằng ECC
+		signature, err = signECC(req.Message)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	default:
+		http.Error(w, "Unsupported algorithm", http.StatusBadRequest)
+		return
+	}
+
+	json.NewEncoder(w).Encode(SignResponse{Signature: signature})
+}
+
+// Hàm xử lý xác thực chữ ký số (verifyHandler)
+func verifyHandler(w http.ResponseWriter, r *http.Request) {
+	var req VerifyRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	var isValid bool
+	switch strings.ToUpper(req.Algorithm) {
+	case "RSA":
+		// Xác thực chữ ký số bằng RSA
+		isValid = verifySignature(req.Message, req.Signature)
+	case "ELGAMAL":
+		// Xác thực chữ ký số bằng Elgamal
+		isValid,_ = verifyElGamal(req.Message, req.Signature)
+	case "ECC":
+		// Xác thực chữ ký số bằng ECC
+		isValid,_ = verifyECC(req.Message, req.Signature)
+	default:
+		http.Error(w, "Unsupported algorithm", http.StatusBadRequest)
+		return
+	}
+
+	json.NewEncoder(w).Encode(VerifyResponse{IsValid: isValid})
+}
+
+
 // Middleware xử lý CORS
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
@@ -110,9 +199,13 @@ func main() {
 	generateRSAKeys(2048)
 	generateElGamalKeys(512)
 	generateECCKeys()
+	generateECCKey()
 
 	http.HandleFunc("/encrypt", corsMiddleware(encryptHandler))
     http.HandleFunc("/decrypt", corsMiddleware(decryptHandler))
+
+	http.HandleFunc("/sign", corsMiddleware(signHandler)) 
+	http.HandleFunc("/verify", corsMiddleware(verifyHandler)) 
 
 	fmt.Println("Server is running on http://localhost:8080")
 	http.ListenAndServe(":8080", nil)

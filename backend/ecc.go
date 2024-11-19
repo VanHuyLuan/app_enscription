@@ -2,7 +2,10 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
@@ -125,4 +128,72 @@ func decryptECC(encryptedMessage string) (string, error) {
 	Mx, _ := pointAdd(C2x, C2y, tempX, tempY)
 
 	return string(Mx.Bytes()), nil
+}
+
+// Định nghĩa tham số đường cong elliptic (P-521 curve)
+var curve = elliptic.P521()
+
+// Khai báo khóa ECC
+var privateKey *ecdsa.PrivateKey
+var publicKey *ecdsa.PublicKey
+
+// Hàm sinh khóa ECC
+func generateECCKey() error {
+	var err error
+	privateKey, err = ecdsa.GenerateKey(curve, rand.Reader)
+	if err != nil {
+		return err
+	}
+	publicKey = &privateKey.PublicKey
+	fmt.Println("ECC Private Key:", privateKey.D)
+	fmt.Println("ECC Public Key:", publicKey.X, publicKey.Y)
+	return nil
+}
+
+// Hàm ký thông điệp sử dụng ECC
+func signECC(message string) (string, error) {
+	// Băm thông điệp
+	hash := sha256.New()
+	hash.Write([]byte(message))
+	hashedMessage := hash.Sum(nil)
+
+	// Ký thông điệp với khóa riêng
+	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hashedMessage)
+	if err != nil {
+		return "", err
+	}
+
+	// Trả về chữ ký dưới dạng chuỗi
+	signature := fmt.Sprintf("%s|%s", r.Text(16), s.Text(16))
+	return signature, nil
+}
+
+// Hàm xác minh chữ ký ECC
+func verifyECC(message, signature string) (bool, error) {
+	// Băm thông điệp
+	hash := sha256.New()
+	hash.Write([]byte(message))
+	hashedMessage := hash.Sum(nil)
+
+	// Phân tách chữ ký thành r và s
+	parts := strings.Split(signature, "|")
+	if len(parts) != 2 {
+		return false, errors.New("invalid signature format")
+	}
+
+	r := new(big.Int)
+	r, ok := r.SetString(parts[0], 16)
+	if !ok {
+		return false, errors.New("invalid r value in signature")
+	}
+
+	s := new(big.Int)
+	s, ok = s.SetString(parts[1], 16)
+	if !ok {
+		return false, errors.New("invalid s value in signature")
+	}
+
+	// Xác minh chữ ký với khóa công khai
+	valid := ecdsa.Verify(publicKey, hashedMessage, r, s)
+	return valid, nil
 }
