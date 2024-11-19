@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/app-encription/static/css/main.dd569261.css",
+    "main.js": "/app-encription/static/js/main.9b073e3e.js",
+    "static/js/453.4e994fd3.chunk.js": "/app-encription/static/js/453.4e994fd3.chunk.js",
+    "index.html": "/app-encription/index.html",
+    "main.dd569261.css.map": "/app-encription/static/css/main.dd569261.css.map",
+    "main.9b073e3e.js.map": "/app-encription/static/js/main.9b073e3e.js.map",
+    "453.4e994fd3.chunk.js.map": "/app-encription/static/js/453.4e994fd3.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.dd569261.css",
+    "static/js/main.9b073e3e.js"
+  ]
+}
