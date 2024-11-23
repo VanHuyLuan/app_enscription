@@ -24,6 +24,71 @@ func generateElGamalKeys(bits int) {
 	y.Exp(g, x, p)
 }
 
+
+// Chia thông điệp thành các đoạn nhỏ (an toàn)
+func splitElgamalMessage(message string) ([]string, error) {
+	maxChunkSize := (p.BitLen()-1)/8 - 1 
+
+	chunks := []string{}
+	runes := []rune(message)
+	currentSize := 0
+	currentChunk := ""
+
+	for _, r := range runes {
+		charSize := len([]byte(string(r)))
+		if currentSize+charSize > maxChunkSize {
+
+			chunks = append(chunks, currentChunk)
+
+			currentChunk = ""
+			currentSize = 0
+		}
+		currentChunk += string(r)
+		currentSize += charSize
+	}
+
+	if currentChunk != "" {
+		chunks = append(chunks, currentChunk)
+	}
+
+	return chunks, nil
+}
+
+// Mã hóa ElGamal cho thông điệp dài
+func encryptElGamalLong(message string) (string, error) {
+	chunks, err := splitElgamalMessage(message)
+	if err != nil {
+		return "", err
+	}
+
+	encryptedChunks := []string{}
+	for _, chunk := range chunks {
+		encryptedChunk, err := encryptElGamal(chunk)
+		if err != nil {
+			return "", err
+		}
+		encryptedChunks = append(encryptedChunks, encryptedChunk)
+	}
+
+	return strings.Join(encryptedChunks, "|"), nil
+}
+
+// Giải mã ElGamal cho thông điệp dài
+func decryptElGamalLong(encryptedMessage string) (string, error) {
+	encryptedChunks := strings.Split(encryptedMessage, "|")
+	decryptedMessage := ""
+
+	for _, encryptedChunk := range encryptedChunks {
+		decryptedChunk, err := decryptElGamal(encryptedChunk)
+		if err != nil {
+			return "", err
+		}
+		decryptedMessage += decryptedChunk
+	}
+
+	return decryptedMessage, nil
+}
+
 // Mã hóa ElGamal
 func encryptElGamal(message string) (string, error) {
 	msgInt := new(big.Int).SetBytes([]byte(message))
@@ -64,14 +129,11 @@ func decryptElGamal(encryptedMessage string) (string, error) {
 func signElGamal(message string) (string, error) {
 	msgInt := new(big.Int).SetBytes([]byte(message))
 
-	// Chọn k ngẫu nhiên
 	k, _ := rand.Int(rand.Reader, new(big.Int).Sub(p, big.NewInt(2)))
 	k.Add(k, big.NewInt(1))
 
-	// Tính r = g^k mod p
 	r := new(big.Int).Exp(g, k, p)
 
-	// Tính s = k^-1 * (H(m) - x * r) mod (p - 1)
 	h := new(big.Int).Set(msgInt)
 	s := new(big.Int).Sub(h, new(big.Int).Mul(x, r))
 	s.Mod(s, new(big.Int).Sub(p, big.NewInt(1)))
@@ -79,13 +141,11 @@ func signElGamal(message string) (string, error) {
 	s.Mul(s, sInv)
 	s.Mod(s, new(big.Int).Sub(p, big.NewInt(1)))
 
-	// Trả về chữ ký (r, s)
 	return fmt.Sprintf("%x,%x", r, s), nil
 }
 
 // Xác minh chữ ký ElGamal
 func verifyElGamal(message string, signature string) (bool, error) {
-	// Chia tách chữ ký thành (r, s)
 	parts := strings.Split(signature, ",")
 	if len(parts) != 2 {
 		return false, fmt.Errorf("sai định dạng chữ ký")
@@ -94,15 +154,12 @@ func verifyElGamal(message string, signature string) (bool, error) {
 	r, _ := new(big.Int).SetString(parts[0], 16)
 	s, _ := new(big.Int).SetString(parts[1], 16)
 
-	// Tính H(m)
 	msgInt := new(big.Int).SetBytes([]byte(message))
 
-	// Tính v1 = g^H(m) * y^r mod p
 	v1 := new(big.Int).Exp(g, msgInt, p)
 	v2 := new(big.Int).Mul(new(big.Int).Exp(y, r, p), new(big.Int).Exp(r, s, p))
 	v2.Mod(v2, p)
 
-	// Kiểm tra v1 == v2
 	return v1.Cmp(v2) == 0, nil
 }
 

@@ -66,7 +66,7 @@ function Sign() {
           <option value="ElGamal">ElGamal</option>
         </select>
         <Link to="/">
-          <button>Encrypt</button>
+          <button className="btn-tran">Encrypt</button>
         </Link>
       </div>
       <h1>Digital Signature</h1>

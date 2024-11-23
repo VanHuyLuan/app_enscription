@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 )
 
@@ -22,57 +23,97 @@ func generateRSAKeys(bits int) {
 	rsaPublicKey = &rsaPrivateKey.PublicKey
 }
 
+// Chia thông điệp thành các khối nhỏ
+func splitRSAMessage(message []byte, blockSize int) [][]byte {
+	var blocks [][]byte
+	for len(message) > 0 {
+		if len(message) > blockSize {
+			blocks = append(blocks, message[:blockSize])
+			message = message[blockSize:]
+		} else {
+			blocks = append(blocks, message)
+			break
+		}
+	}
+	return blocks
+}
+
 // Mã hóa RSA
 func encryptRSA(message string) (string, error) {
-	encryptedBytes, err := rsa.EncryptOAEP(
-		sha256.New(),
-		rand.Reader,
-		rsaPublicKey,
-		[]byte(message),
-		nil,
-	)
+	blockSize := rsaPublicKey.Size() - 2*sha256.Size - 2 
+	blocks := splitRSAMessage([]byte(message), blockSize)
+
+	var encryptedBlocks []string
+	for _, block := range blocks {
+		encryptedBytes, err := rsa.EncryptOAEP(
+			sha256.New(),
+			rand.Reader,
+			rsaPublicKey,
+			block,
+			nil,
+		)
+		if err != nil {
+			return "", err
+		}
+		encryptedBlocks = append(encryptedBlocks, base64.StdEncoding.EncodeToString(encryptedBytes))
+	}
+
+	encryptedMessage, err := json.Marshal(encryptedBlocks)
 	if err != nil {
 		return "", err
 	}
-	return base64.StdEncoding.EncodeToString(encryptedBytes), nil
+
+	return base64.StdEncoding.EncodeToString(encryptedMessage), nil
 }
 
 // Giải mã RSA
 func decryptRSA(encryptedMessage string) (string, error) {
-	ciphertext, _ := base64.StdEncoding.DecodeString(encryptedMessage)
-	decryptedBytes, err := rsa.DecryptOAEP(
-		sha256.New(),
-		rand.Reader,
-		rsaPrivateKey,
-		ciphertext,
-		nil,
-	)
+	decodedMessage, _ := base64.StdEncoding.DecodeString(encryptedMessage)
+
+	var encryptedBlocks []string
+	err := json.Unmarshal(decodedMessage, &encryptedBlocks)
 	if err != nil {
 		return "", err
 	}
-	return string(decryptedBytes), nil
+
+	var decryptedMessage []byte
+	for _, block := range encryptedBlocks {
+		ciphertext, _ := base64.StdEncoding.DecodeString(block)
+		decryptedBytes, err := rsa.DecryptOAEP(
+			sha256.New(),
+			rand.Reader,
+			rsaPrivateKey,
+			ciphertext,
+			nil,
+		)
+		if err != nil {
+			return "", err
+		}
+		decryptedMessage = append(decryptedMessage, decryptedBytes...)
+	}
+
+	return string(decryptedMessage), nil
 }
 
 // Tạo chữ ký số (Digital Signature)
 func signMessage(message string) (string, error) {
-	// Hash thông điệp bằng SHA-256
+
 	hashed := sha256.Sum256([]byte(message))
-	// Ký thông điệp đã được hash
+
 	signature, err := rsa.SignPKCS1v15(rand.Reader, rsaPrivateKey, 0, hashed[:])
 	if err != nil {
 		return "", err
 	}
-	// Mã hóa chữ ký bằng Base64
+
 	return base64.StdEncoding.EncodeToString(signature), nil
 }
 
 // Xác thực chữ ký số (Verify Digital Signature)
 func verifySignature(message string, signature string) bool {
-	// Hash thông điệp bằng SHA-256
+
 	hashed := sha256.Sum256([]byte(message))
-	// Giải mã chữ ký từ Base64
+
 	signatureBytes, _ := base64.StdEncoding.DecodeString(signature)
-	// Xác thực chữ ký bằng khóa công khai
 	err := rsa.VerifyPKCS1v15(rsaPublicKey, 0, hashed[:], signatureBytes)
 	return err == nil
 }

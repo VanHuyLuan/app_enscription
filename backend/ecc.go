@@ -91,6 +91,60 @@ func pointAdd(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
 	return rx, ry
 }
 
+// Chia thông điệp thành các đoạn nhỏ
+func splitMessageECC(message string, maxSize int) []string {
+	chunks := []string{}
+	for len(message) > 0 {
+		if len(message) > maxSize {
+			chunks = append(chunks, message[:maxSize])
+			message = message[maxSize:]
+		} else {
+			chunks = append(chunks, message)
+			break
+		}
+	}
+	return chunks
+}
+
+// Mã hóa thông điệp dài
+func encryptECCLong(message string) (string, error) {
+	maxSize := curve.Params().BitSize / 8 
+	chunks := splitMessageECC(message, maxSize)
+
+	encryptedChunks := []string{}
+	for _, chunk := range chunks {
+		encryptedChunk, err := encryptECC(chunk)
+		if err != nil {
+			return "", err
+		}
+		encryptedChunks = append(encryptedChunks, encryptedChunk)
+	}
+
+	return strings.Join(encryptedChunks, "|"), nil
+}
+
+// Giải mã ECC cho thông điệp dài
+func decryptECCLong(encryptedMessage string) (string, error) {
+	encryptedChunks := strings.Split(encryptedMessage, ";")
+	var decryptedMessageBuilder strings.Builder
+
+	for _, chunk := range encryptedChunks {
+		if chunk == "" {
+			continue 
+		}
+
+		decryptedChunk, err := decryptECC(chunk)
+		if err != nil {
+			return "", fmt.Errorf("failed to decrypt chunk: %v", err)
+		}
+
+		decryptedMessageBuilder.WriteString(decryptedChunk)
+	}
+
+	return decryptedMessageBuilder.String(), nil
+}
+
+
 // Mã hóa ECC
 func encryptECC(message string) (string, error) {
 	msgInt := new(big.Int).SetBytes([]byte(message))
@@ -100,10 +154,8 @@ func encryptECC(message string) (string, error) {
 
 	k, _ := rand.Int(rand.Reader, curveP)
 	C1x, C1y := pointMultiply(k, eccPublicKeyX, eccPublicKeyY)
-	// Tách riêng giá trị trả về của hàm pointMultiply
 	Px, Py := pointMultiply(k, eccPublicKeyX, eccPublicKeyY)
 
-	// Sử dụng các giá trị trả về trong hàm pointAdd
 	C2x, C2y := pointAdd(msgInt, big.NewInt(0), Px, Py)
 
 
@@ -130,7 +182,6 @@ func decryptECC(encryptedMessage string) (string, error) {
 	return string(Mx.Bytes()), nil
 }
 
-// Định nghĩa tham số đường cong elliptic (P-521 curve)
 var curve = elliptic.P521()
 
 // Khai báo khóa ECC
@@ -152,30 +203,25 @@ func generateECCKey() error {
 
 // Hàm ký thông điệp sử dụng ECC
 func signECC(message string) (string, error) {
-	// Băm thông điệp
 	hash := sha256.New()
 	hash.Write([]byte(message))
 	hashedMessage := hash.Sum(nil)
 
-	// Ký thông điệp với khóa riêng
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hashedMessage)
 	if err != nil {
 		return "", err
 	}
 
-	// Trả về chữ ký dưới dạng chuỗi
 	signature := fmt.Sprintf("%s|%s", r.Text(16), s.Text(16))
 	return signature, nil
 }
 
 // Hàm xác minh chữ ký ECC
 func verifyECC(message, signature string) (bool, error) {
-	// Băm thông điệp
 	hash := sha256.New()
 	hash.Write([]byte(message))
 	hashedMessage := hash.Sum(nil)
 
-	// Phân tách chữ ký thành r và s
 	parts := strings.Split(signature, "|")
 	if len(parts) != 2 {
 		return false, errors.New("invalid signature format")
@@ -193,7 +239,6 @@ func verifyECC(message, signature string) (bool, error) {
 		return false, errors.New("invalid s value in signature")
 	}
 
-	// Xác minh chữ ký với khóa công khai
 	valid := ecdsa.Verify(publicKey, hashedMessage, r, s)
 	return valid, nil
 }

@@ -112,3 +112,17 @@ textarea {
 .sign-button:hover {
   background-color: #7300a4;
 }
+
+.btn-tran {
+  font-size: 16px;
+  color: #ffffff;
+  background-color: #008c31;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-tran:hover {
+  background-color: #01ff5a;
+}

@@ -60,14 +60,14 @@ func encryptHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(EncryptResponse{EncryptedMessage: encryptedMessage})
 
 	case "ELGAMAL":
-		encryptedMessage, err := encryptElGamal(req.Message)
+		encryptedMessage, err := encryptElGamalLong(req.Message)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(EncryptResponse{EncryptedMessage: encryptedMessage})
 	case "ECC":
-		encryptedMessage, err := encryptECC(req.Message)
+		encryptedMessage, err := encryptECCLong(req.Message)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -91,14 +91,14 @@ func decryptHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(DecryptResponse{DecryptedMessage: decryptedMessage})
 
 	case "ELGAMAL":
-		decryptedMessage, err := decryptElGamal(req.EncryptedMessage)
+		decryptedMessage, err := decryptElGamalLong(req.EncryptedMessage)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(DecryptResponse{DecryptedMessage: decryptedMessage})
 	case "ECC":
-		decryptedMessage, err := decryptECC(req.EncryptedMessage)
+		decryptedMessage, err := decryptECCLong(req.EncryptedMessage)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

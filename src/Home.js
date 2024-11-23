@@ -61,7 +61,7 @@ function Home() {
           <option value="ElGamal">ElGamal</option>
         </select>
         <Link to="/sign">
-          <button>Signature</button>
+          <button className="btn-tran">Signature</button>
         </Link>
       </div>
 
