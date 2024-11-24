@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 )
@@ -91,97 +92,73 @@ func pointAdd(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
 	return rx, ry
 }
 
-// Chia thông điệp thành các đoạn nhỏ
-func splitMessageECC(message string, maxSize int) []string {
-	chunks := []string{}
-	for len(message) > 0 {
-		if len(message) > maxSize {
-			chunks = append(chunks, message[:maxSize])
-			message = message[maxSize:]
-		} else {
-			chunks = append(chunks, message)
-			break
-		}
-	}
-	return chunks
-}
-
-// Mã hóa thông điệp dài
-func encryptECCLong(message string) (string, error) {
-	maxSize := curve.Params().BitSize / 8 
-	chunks := splitMessageECC(message, maxSize)
-
-	encryptedChunks := []string{}
-	for _, chunk := range chunks {
-		encryptedChunk, err := encryptECC(chunk)
-		if err != nil {
-			return "", err
-		}
-		encryptedChunks = append(encryptedChunks, encryptedChunk)
-	}
-
-	return strings.Join(encryptedChunks, "|"), nil
-}
-
-// Giải mã ECC cho thông điệp dài
-func decryptECCLong(encryptedMessage string) (string, error) {
-	encryptedChunks := strings.Split(encryptedMessage, ";")
-	var decryptedMessageBuilder strings.Builder
-
-	for _, chunk := range encryptedChunks {
-		if chunk == "" {
-			continue 
-		}
-
-		decryptedChunk, err := decryptECC(chunk)
-		if err != nil {
-			return "", fmt.Errorf("failed to decrypt chunk: %v", err)
-		}
-
-		decryptedMessageBuilder.WriteString(decryptedChunk)
-	}
-
-	return decryptedMessageBuilder.String(), nil
-}
-
-
-// Mã hóa ECC
+// Hàm mã hóa ECC với việc chia nhỏ thông điệp thành các khối
 func encryptECC(message string) (string, error) {
-	msgInt := new(big.Int).SetBytes([]byte(message))
-	if msgInt.Cmp(curveP) >= 0 {
-		return "", errors.New("Message is too large")
-	}
+    // Kích thước khối
+    blockSize := 60
+    var encryptedMessage string
 
-	k, _ := rand.Int(rand.Reader, curveP)
-	C1x, C1y := pointMultiply(k, eccPublicKeyX, eccPublicKeyY)
-	Px, Py := pointMultiply(k, eccPublicKeyX, eccPublicKeyY)
+    // Chia thông điệp thành các khối
+    for start := 0; start < len(message); start += blockSize {
+        end := int(math.Min(float64(start+blockSize), float64(len(message))))
+        block := message[start:end]
 
-	C2x, C2y := pointAdd(msgInt, big.NewInt(0), Px, Py)
+        msgInt := new(big.Int).SetBytes([]byte(block))
+        if msgInt.Cmp(curveP) >= 0 {
+            return "", errors.New("Message block is too large")
+        }
 
+        // Tạo số ngẫu nhiên k
+        k, _ := rand.Int(rand.Reader, curveP)
 
-	encryptedMsg := fmt.Sprintf("%s|%s|%s|%s", C1x.String(), C1y.String(), C2x.String(), C2y.String())
-	return encryptedMsg, nil
+        // Tính toán điểm C1 và C2
+        C1x, C1y := pointMultiply(k, eccPublicKeyX, eccPublicKeyY)
+        Px, Py := pointMultiply(k, eccPublicKeyX, eccPublicKeyY)
+        C2x, C2y := pointAdd(msgInt, big.NewInt(0), Px, Py)
+
+        // Kết hợp C1, C2 thành một chuỗi
+        encryptedMessage += fmt.Sprintf("%s|%s|%s|%s|", C1x.String(), C1y.String(), C2x.String(), C2y.String())
+    }
+
+    // Loại bỏ dấu '|' cuối cùng
+    encryptedMessage = encryptedMessage[:len(encryptedMessage)-1]
+
+    return encryptedMessage, nil
 }
 
-// Giải mã ECC
+
+// Hàm giải mã ECC với việc xử lý từng khối
 func decryptECC(encryptedMessage string) (string, error) {
-	parts := strings.Split(encryptedMessage, "|")
-	if len(parts) != 4 {
-		return "", errors.New("Invalid encrypted message format")
-	}
+    parts := strings.Split(encryptedMessage, "|")
+    if len(parts)%4 != 0 {
+        return "", errors.New("Invalid encrypted message format")
+    }
 
-	C1x,_ := new(big.Int).SetString(parts[0], 10)
-	C1y,_ := new(big.Int).SetString(parts[1], 10)
-	C2x,_ := new(big.Int).SetString(parts[2], 10)
-	C2y,_ := new(big.Int).SetString(parts[3], 10)
+    var decryptedMessage string
 
-	tempX, tempY := pointMultiply(eccPrivateKey, C1x, C1y)
-	tempY.Neg(tempY).Mod(tempY, curveP)
-	Mx, _ := pointAdd(C2x, C2y, tempX, tempY)
+    // Giải mã từng khối
+    for i := 0; i < len(parts); i += 4 {
+        C1x, _ := new(big.Int).SetString(parts[i], 10)
+        C1y, _ := new(big.Int).SetString(parts[i+1], 10)
+        C2x, _ := new(big.Int).SetString(parts[i+2], 10)
+        C2y, _ := new(big.Int).SetString(parts[i+3], 10)
 
-	return string(Mx.Bytes()), nil
+        // Tính toán điểm tempX và tempY bằng việc nhân điểm C1 với khóa riêng
+        tempX, tempY := pointMultiply(eccPrivateKey, C1x, C1y)
+        tempY.Neg(tempY).Mod(tempY, curveP)
+
+        // Tính toán Mx bằng cách cộng C2 với điểm temp
+        Mx, _ := pointAdd(C2x, C2y, tempX, tempY)
+
+        // Chuyển đổi Mx thành chuỗi và thêm vào thông điệp đã giải mã
+        decryptedMessage += string(Mx.Bytes())
+    }
+
+    return decryptedMessage, nil
 }
 
+
+// Định nghĩa tham số đường cong elliptic (P-521 curve)
 var curve = elliptic.P521()
 
 // Khai báo khóa ECC
@@ -203,25 +180,30 @@ func generateECCKey() error {
 
 // Hàm ký thông điệp sử dụng ECC
 func signECC(message string) (string, error) {
+	// Băm thông điệp
 	hash := sha256.New()
 	hash.Write([]byte(message))
 	hashedMessage := hash.Sum(nil)
 
+	// Ký thông điệp với khóa riêng
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hashedMessage)
 	if err != nil {
 		return "", err
 	}
 
+	// Trả về chữ ký dưới dạng chuỗi
 	signature := fmt.Sprintf("%s|%s", r.Text(16), s.Text(16))
 	return signature, nil
 }
 
 // Hàm xác minh chữ ký ECC
 func verifyECC(message, signature string) (bool, error) {
+	// Băm thông điệp
 	hash := sha256.New()
 	hash.Write([]byte(message))
 	hashedMessage := hash.Sum(nil)
 
+	// Phân tách chữ ký thành r và s
 	parts := strings.Split(signature, "|")
 	if len(parts) != 2 {
 		return false, errors.New("invalid signature format")
@@ -239,6 +221,7 @@ func verifyECC(message, signature string) (bool, error) {
 		return false, errors.New("invalid s value in signature")
 	}
 
+	// Xác minh chữ ký với khóa công khai
 	valid := ecdsa.Verify(publicKey, hashedMessage, r, s)
 	return valid, nil
 }

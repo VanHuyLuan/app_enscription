@@ -67,7 +67,7 @@ func encryptHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(EncryptResponse{EncryptedMessage: encryptedMessage})
 	case "ECC":
-		encryptedMessage, err := encryptECCLong(req.Message)
+		encryptedMessage, err := encryptECC(req.Message)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -98,7 +98,7 @@ func decryptHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(DecryptResponse{DecryptedMessage: decryptedMessage})
 	case "ECC":
-		decryptedMessage, err := decryptECCLong(req.EncryptedMessage)
+		decryptedMessage, err := decryptECC(req.EncryptedMessage)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
