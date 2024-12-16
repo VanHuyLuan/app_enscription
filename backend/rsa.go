@@ -7,10 +7,104 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 )
 
 var rsaPrivateKey *rsa.PrivateKey
 var rsaPublicKey *rsa.PublicKey
+
+// Hàm tính Ước chung lớn nhất (GCD)
+func gcd(a, b *big.Int) *big.Int {
+	zero := big.NewInt(0)
+	for b.Cmp(zero) > 0 {
+		a, b = b, new(big.Int).Mod(a, b)
+	}
+	return a
+}
+
+// Hàm tìm số nghịch đảo của e modulo φ(n)
+func modInverse_1(e, phi *big.Int) (*big.Int, error) {
+	g, x, _ := extendedGCD(e, phi)
+	if g.Cmp(big.NewInt(1)) != 0 {
+		return nil, fmt.Errorf("e và φ(n) không coprime, không thể tìm nghịch đảo")
+	}
+	return x.Mod(x, phi), nil
+}
+
+// Hàm Extended Euclidean Algorithm để tính nghịch đảo modular
+func extendedGCD(a, b *big.Int) (*big.Int, *big.Int, *big.Int) {
+	zero := big.NewInt(0)
+	x0, x1, y0, y1 := big.NewInt(1), big.NewInt(0), big.NewInt(0), big.NewInt(1)
+	for b.Cmp(zero) > 0 {
+		q := new(big.Int).Div(a, b)
+		a, b = b, new(big.Int).Mod(a, b)
+		x0, x1 = x1, new(big.Int).Sub(x0, new(big.Int).Mul(q, x1))
+		y0, y1 = y1, new(big.Int).Sub(y0, new(big.Int).Mul(q, y1))
+	}
+	return a, x0, y0
+}
+
+// Hàm tạo cặp khóa RSA tự động
+func generateRSAKeys_1(bits int) (*rsa.PrivateKey, *rsa.PublicKey, error) {
+	// Tạo số nguyên tố p và q
+	p, err := randPrime(bits / 2)
+	if err != nil {
+		return nil, nil, fmt.Errorf("không thể tạo p: %v", err)
+	}
+	q, err := randPrime(bits / 2)
+	if err != nil {
+		return nil, nil, fmt.Errorf("không thể tạo q: %v", err)
+	}
+
+	// Tính n = p * q
+	n := new(big.Int).Mul(p, q)
+
+	// Tính φ(n) = (p-1)*(q-1)
+	phi := new(big.Int).Mul(new(big.Int).Sub(p, big.NewInt(1)), new(big.Int).Sub(q, big.NewInt(1)))
+
+	// Chọn e sao cho 1 < e < φ(n) và gcd(e, φ(n)) = 1
+	e := big.NewInt(65537) // Một số công khai phổ biến
+	if gcd(e, phi).Cmp(big.NewInt(1)) != 0 {
+		return nil, nil, fmt.Errorf("e và φ(n) không coprime")
+	}
+
+	// Tính d là nghịch đảo của e mod φ(n)
+	d, err := modInverse_1(e, phi)
+	if err != nil {
+		return nil, nil, fmt.Errorf("không thể tính d: %v", err)
+	}
+
+	// Tạo khóa công khai và khóa riêng
+	privateKey := &rsa.PrivateKey{
+		D:      d,
+		PublicKey: rsa.PublicKey{
+			N: n,
+			E: int(e.Int64()),
+		},
+	}
+	publicKey := &privateKey.PublicKey
+
+	return privateKey, publicKey, nil
+}
+
+// Hàm tạo một số nguyên tố ngẫu nhiên
+func randPrime(bits int) (*big.Int, error) {
+	// Sử dụng một hàm sinh số ngẫu nhiên với độ dài bits
+	// Giới hạn độ dài của bits sẽ tùy thuộc vào yêu cầu bảo mật
+	max := new(big.Int).Lsh(big.NewInt(1), uint(bits))
+	min := new(big.Int).Lsh(big.NewInt(1), uint(bits-1))
+
+	for {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return nil, fmt.Errorf("lỗi khi tạo số ngẫu nhiên: %v", err)
+		}
+		n.Add(n, min) // Đảm bảo số nguyên tố có đủ độ dài bits
+		if n.ProbablyPrime(20) { // Kiểm tra xem n có phải là số nguyên tố không
+			return n, nil
+		}
+	}
+}
 
 // Tạo cặp khóa RSA
 func generateRSAKeys(bits int) {
@@ -21,6 +115,8 @@ func generateRSAKeys(bits int) {
 		return
 	}
 	rsaPublicKey = &rsaPrivateKey.PublicKey
+	println("rsaPrivateKey: ", rsaPrivateKey)
+	println( "rsaPublicKey: ",rsaPublicKey)
 }
 
 // Chia thông điệp thành các khối nhỏ
@@ -40,6 +136,9 @@ func splitRSAMessage(message []byte, blockSize int) [][]byte {
 
 // Mã hóa RSA
 func encryptRSA(message string) (string, error) {
+	if rsaPublicKey == nil {
+        return "nil", fmt.Errorf("public key is nil")
+    }
 	blockSize := rsaPublicKey.Size() - 2*sha256.Size - 2 
 	blocks := splitRSAMessage([]byte(message), blockSize)
 

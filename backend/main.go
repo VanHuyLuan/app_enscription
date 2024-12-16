@@ -197,6 +197,7 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 func main() {
 	generateRSAKeys(2048)
+	generateRSAKeys_1(2048)
 	generateElGamalKeys(512)
 	generateECCKeys()
 	generateECCKey()
